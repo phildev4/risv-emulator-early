@@ -12,6 +12,7 @@ void Memory::load(const std::filesystem::path& path,
     std::fstream fs(path, std::ios::out | std::ios::binary | std::ios::app | std::ios::in);
     auto size = std::filesystem::file_size(path);
 
+    if (!fs) throw std::runtime_error("File doesnt exist");
     if (size > bytes_.size() - addr ) throw std::out_of_range("too large");
     fs.read(reinterpret_cast<char*>(bytes_.data() + addr), static_cast<std::streamsize>(size));
 }

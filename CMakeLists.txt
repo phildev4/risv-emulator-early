@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(risv LANGUAGES CXX)
+project(riscv LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Language standard: C++23 everywhere (Catch2 too, so both sides agree).
@@ -13,10 +13,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # AddressSanitizer in Debug builds: catches out-of-bounds access, use after
 # free and leaks at runtime, standing in for Rust's safety checks.
 # ---------------------------------------------------------------------------
-option(RISV_ASAN "Build Debug configurations with AddressSanitizer" ON)
+option(RISCV_ASAN "Build Debug configurations with AddressSanitizer" ON)
 
 if(MSVC)
-    if(RISV_ASAN)
+    if(RISCV_ASAN)
         # ASan doesn't work together with these MSVC Debug defaults:
         # runtime checks (/RTC1) and incremental linking.
         string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
@@ -25,14 +25,14 @@ if(MSVC)
         add_compile_options($<$<CONFIG:Debug>:/fsanitize=address>)
 
         # The ASan runtime is a DLL that sits next to cl.exe. It gets copied
-        # next to each program (see risv_setup_target) so the programs start
+        # next to each program (see riscv_setup_target) so the programs start
         # from Visual Studio, the command line and the test runner alike.
         get_filename_component(_cl_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
-        file(GLOB RISV_ASAN_RUNTIME "${_cl_dir}/clang_rt.asan*.dll")
-        if(NOT RISV_ASAN_RUNTIME)
+        file(GLOB RISCV_ASAN_RUNTIME "${_cl_dir}/clang_rt.asan*.dll")
+        if(NOT RISCV_ASAN_RUNTIME)
             message(WARNING "ASan runtime DLL not found next to ${CMAKE_CXX_COMPILER}. "
                             "Install the 'C++ AddressSanitizer' component in the Visual Studio "
-                            "Installer, or configure with -DRISV_ASAN=OFF.")
+                            "Installer, or configure with -DRISCV_ASAN=OFF.")
         endif()
     else()
         # Visual Studio Hot Reload (from the original template). It can't be
@@ -40,7 +40,7 @@ if(MSVC)
         set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
             "$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>")
     endif()
-elseif(RISV_ASAN)
+elseif(RISCV_ASAN)
     # GCC and Clang (e.g. under WSL) also get the undefined-behavior sanitizer.
     add_compile_options($<$<CONFIG:Debug>:-fsanitize=address,undefined>
                         $<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
@@ -50,23 +50,23 @@ endif()
 # ---------------------------------------------------------------------------
 # Strict warnings, for our own code only (not for Catch2).
 # ---------------------------------------------------------------------------
-add_library(risv_warnings INTERFACE)
+add_library(riscv_warnings INTERFACE)
 if(MSVC)
-    target_compile_options(risv_warnings INTERFACE /W4 /permissive-)
+    target_compile_options(riscv_warnings INTERFACE /W4 /permissive-)
 else()
-    target_compile_options(risv_warnings INTERFACE
+    target_compile_options(riscv_warnings INTERFACE
         -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
 endif()
 
 # Call this on every target we define.
-function(risv_setup_target target)
-    target_link_libraries(${target} PRIVATE risv_warnings)
+function(riscv_setup_target target)
+    target_link_libraries(${target} PRIVATE riscv_warnings)
 
     get_target_property(_type ${target} TYPE)
-    if(_type STREQUAL "EXECUTABLE" AND RISV_ASAN_RUNTIME)
+    if(_type STREQUAL "EXECUTABLE" AND RISCV_ASAN_RUNTIME)
         add_custom_command(TARGET ${target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${RISV_ASAN_RUNTIME} $<TARGET_FILE_DIR:${target}>
+                    ${RISCV_ASAN_RUNTIME} $<TARGET_FILE_DIR:${target}>
             VERBATIM)
     endif()
 endfunction()
@@ -87,5 +87,5 @@ enable_testing()
 # ---------------------------------------------------------------------------
 # Sub-projects
 # ---------------------------------------------------------------------------
-add_subdirectory(risv)   # the emulator library and the risv program
+add_subdirectory(riscv)   # the emulator library and the riscv program
 add_subdirectory(tests)  # unit tests

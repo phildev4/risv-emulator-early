@@ -1,4 +1,4 @@
-#include "risv/memory.h"
+#include "riscv/memory.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -9,7 +9,7 @@
 #include <stdexcept>
 
 // These tests are the specification for Memory. They all fail until you
-// implement risv/memory.cpp.
+// implement riscv/memory.cpp.
 
 TEST_CASE("new memory is all zeros") {
     Memory mem(16);
@@ -64,11 +64,11 @@ TEST_CASE("accesses outside memory throw std::out_of_range") {
 }
 
 TEST_CASE("load copies a file's bytes into memory at the given address") {
-    const auto path = std::filesystem::temp_directory_path() / "risv_test_program.bin";
+    const auto path = std::filesystem::temp_directory_path() / "riscv_test_program.bin";
     {
         // 0x00000013 is `addi x0, x0, 0`, the RISC-V "nop" instruction.
         const std::array<char, 4> nop{0x13, 0x00, 0x00, 0x00};
-        std::ofstream out(path, std::ios::binary);
+        std::ofstream out(path, std::ios::binary); 
         out.write(nop.data(), static_cast<std::streamsize>(nop.size()));
     }
 
@@ -88,7 +88,7 @@ TEST_CASE("load reports problems") {
     }
 
     SECTION("a file that doesn't fit throws std::out_of_range") {
-        const auto path = std::filesystem::temp_directory_path() / "risv_test_too_big.bin";
+        const auto path = std::filesystem::temp_directory_path() / "riscv_test_too_big.bin";
         {
             const std::array<char, 8> eight_bytes{};
             std::ofstream out(path, std::ios::binary);
@@ -97,4 +97,24 @@ TEST_CASE("load reports problems") {
         CHECK_THROWS_AS(mem.load(path), std::out_of_range);
         std::filesystem::remove(path);
     }
+    
+    
+}
+TEST_CASE("File load overload") {
+    Memory mem(16);
+    
+    SECTION("Out of range check") {
+        const auto path = std::filesystem::temp_directory_path() / "out_of_range.bin";
+        {
+            const std::array<char, 4> four_bytes{};
+            std::ofstream out(path, std::ios::binary);
+            out.write(four_bytes.data(), static_cast<std::streamsize>(four_bytes.size()));
+
+
+        }
+        CHECK_THROWS_AS(mem.load(path,20), std::out_of_range);
+        std::filesystem::remove(path);
+
+    }
+
 }

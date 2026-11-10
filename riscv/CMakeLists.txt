@@ -5,6 +5,8 @@ add_library(riscv_core STATIC
     memory.h
     decoder.cpp
     decoder.h
+    cpu.cpp
+    cpu.h
 )
 target_include_directories(riscv_core PUBLIC ${PROJECT_SOURCE_DIR})
 riscv_setup_target(riscv_core)

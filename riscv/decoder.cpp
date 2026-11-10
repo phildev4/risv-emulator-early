@@ -1,4 +1,4 @@
-
+    
 #include "memory.h"
 #include "decoder.h"
 
@@ -32,7 +32,7 @@ std::int32_t Decoder::imm_i(uint32_t instruction) {
     if (imm & 0x800u) {
         return static_cast<int32_t>(imm) - 0x1000;
     }
-    return static_cast<int32_t>(imm);
+    return static_cast<int32_t>(imm); //sign extension to 32 bit int
 }
 
 std::int32_t Decoder::imm_s(uint32_t instruction) {

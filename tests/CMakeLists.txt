@@ -1,6 +1,7 @@
 # Unit tests. Add a test_<something>.cpp file per part of the emulator.
 add_executable(riscv_tests
     test_memory.cpp
+    test_cpu.cpp
 )
 target_link_libraries(riscv_tests PRIVATE riscv_core Catch2::Catch2WithMain)
 riscv_setup_target(riscv_tests)

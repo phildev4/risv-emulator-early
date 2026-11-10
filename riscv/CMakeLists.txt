@@ -13,7 +13,7 @@ riscv_setup_target(riscv_core)
 
 # The program you run.
 add_executable(riscv
-    riscv.cpp
+    main.cpp
 )
 target_link_libraries(riscv PRIVATE riscv_core)
 riscv_setup_target(riscv)

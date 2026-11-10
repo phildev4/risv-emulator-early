@@ -6,7 +6,8 @@ class CPU {
 
 public:
 	explicit CPU(Memory& mem);
-	void step();
+	// Execute one instruction. ECALL/EBREAK return false without advancing PC.
+	bool step();
 	/// <summary>
 	///  stores content of rs1 + constant IMM at rd
 	/// </summary>
@@ -102,6 +103,7 @@ public:
 
 
 	void write_register(uint32_t index, uint32_t value);
+	uint32_t read_register(uint32_t index) const;
 
 private:
 	struct Registers {

@@ -88,4 +88,5 @@ enable_testing()
 # Sub-projects
 # ---------------------------------------------------------------------------
 add_subdirectory(riscv)   # the emulator library and the riscv program
+add_subdirectory(samples) # generate a raw RISC-V sample program
 add_subdirectory(tests)  # unit tests

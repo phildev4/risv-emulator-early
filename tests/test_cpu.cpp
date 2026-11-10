@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <initializer_list>
+#include <stdexcept>
 
 namespace {
     constexpr uint32_t nop = 0x00000013u; // addi x0, x0, 0
@@ -65,6 +66,37 @@ TEST_CASE("write_register updates the selected register but cannot change x0") {
         CAPTURE(reg);
         CHECK(register_value(cpu, mem, reg) == 0xA5000000u + reg);
     }
+}
+
+TEST_CASE("registers can be inspected without changing CPU state") {
+    Memory mem(256);
+    CPU cpu(mem);
+    cpu.write_register(10, 55);
+    CHECK(cpu.read_register(10) == 55u);
+    CHECK(cpu.read_register(0) == 0u);
+    CHECK_THROWS_AS(cpu.read_register(32), std::out_of_range);
+}
+
+TEST_CASE("step returns true for arithmetic and false at ECALL or EBREAK") {
+    for (uint32_t halt : {0x00000073u, 0x00100073u}) {
+        CAPTURE(halt);
+        Memory mem(256);
+        CPU cpu(mem);
+        mem.write32(0, 0x03700513u); // addi a0, zero, 55
+        mem.write32(4, halt);
+        mem.write32(8, 0x00100513u); // must not execute after halting
+        REQUIRE(cpu.step());
+        CHECK_FALSE(cpu.step());
+        CHECK(cpu.read_register(10) == 55u);
+        CHECK_FALSE(cpu.step()); // stays at the halt instruction
+    }
+}
+
+TEST_CASE("unsupported opcodes report an error instead of aborting the host") {
+    Memory mem(256);
+    CPU cpu(mem);
+    mem.write32(0, 0xFFFFFFFFu);
+    CHECK_THROWS_AS(cpu.step(), std::runtime_error);
 }
 
 TEST_CASE("immediate arithmetic and logic produce the expected 32-bit result") {

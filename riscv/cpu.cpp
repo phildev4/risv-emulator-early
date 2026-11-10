@@ -1,5 +1,8 @@
 #include "cpu.h"
 #include "memory.h"
+#include "decoder.h"
+#include <stdexcept>
+
 
 CPU::CPU(Memory& mem) : mem_(mem) {} //member initilisation 
 
@@ -9,12 +12,125 @@ void CPU::write_register(uint32_t index, uint32_t value) {
 	}
 
 }
-void CPU::step() {
-	
+bool CPU::step() {
+	uint32_t instruction = mem_.read32(regs.PC);
+	Decoder decode;
+	uint32_t opcode = decode.opcode(instruction);
+	uint32_t rd = decode.rd(instruction);
+	uint32_t funct3 = decode.funct3(instruction);
+	uint32_t rs1 = decode.rs1(instruction);
+	uint32_t rs2 = decode.rs2(instruction);
+	uint32_t funct7 = decode.funct7(instruction);
+
+	int32_t imm_i = decode.imm_i(instruction);
+	int32_t imm_s = decode.imm_s(instruction);
+	int32_t imm_b = decode.imm_b(instruction);
+	uint32_t imm_u = static_cast<uint32_t>(decode.imm_u(instruction)) >> 12;
+	int32_t imm_j = decode.imm_j(instruction);
+
+
+	switch (opcode) {
+	case 0x37: lui(rd, imm_u);   break;
+	case 0x17: auipc(rd, imm_u); break;
+
+	case 0x6F: jal(rd, imm_j); return true;
+	case 0x67: jalr(rd, imm_i, rs1); return true;
+
+	case 0x63: // branches
+		switch (funct3) {
+		case 0x0: beq(rs1, rs2, imm_b);  break;
+		case 0x1: bnq(rs1, rs2, imm_b);  break;
+		case 0x4: blt(rs1, rs2, imm_b);  break;
+		case 0x5: bge(rs1, rs2, imm_b);  break;
+		case 0x6: bltu(rs1, rs2, imm_b); break;
+		case 0x7: bgeu(rs1, rs2, imm_b); break;
+		default: throw std::runtime_error("Unsupported branch instruction");
+		}
+		return true;
+
+	case 0x03: // loads
+		switch (funct3) {
+		case 0x0: lb(rd, imm_i, rs1);  break;
+		case 0x1: lh(rd, imm_i, rs1);  break;
+		case 0x2: lw(rd, imm_i, rs1);  break;
+		case 0x4: lbu(rd, imm_i, rs1); break;
+		case 0x5: lhu(rd, imm_i, rs1); break;
+		default: throw std::runtime_error("Unsupported load instruction");
+		}
+		break;
+
+	case 0x23: // stores
+		switch (funct3) {
+		case 0x0: sb(rs2, imm_s, rs1); break;
+		case 0x1: sh(rs2, imm_s, rs1); break;
+		case 0x2: sw(rs2, imm_s, rs1); break;
+		default: throw std::runtime_error("Unsupported store instruction");
+		}
+		break;
+
+	case 0x13: // register-immediate
+		switch (funct3) {
+		case 0x0: addi(rd, rs1, imm_i);  break;
+		case 0x2: slti(rd, rs1, imm_i);  break;
+		case 0x3: sltiu(rd, rs1, imm_i); break;
+		case 0x4: xori(rd, rs1, imm_i);  break;
+		case 0x6: ori(rd, rs1, imm_i);   break;
+		case 0x7: andi(rd, rs1, imm_i);  break;
+		case 0x1: // shamt where rs2
+			if (funct7 == 0x00) slli(rd, rs1, rs2);
+			else throw std::runtime_error("Unsupported shift instruction");
+			break;
+		case 0x5:
+			if (funct7 == 0x00)      srli(rd, rs1, rs2);
+			else if (funct7 == 0x20) srai(rd, rs1, rs2);
+			else throw std::runtime_error("Unsupported shift instruction");
+			break;
+		}
+		break;
+
+	case 0x33: // register-register
+		if (funct7 == 0x00) {
+			switch (funct3) {
+			case 0x0: add(rd, rs1, rs2);         break;
+			case 0x1: sll(rd, rs1, rs2);         break;
+			case 0x2: slt(rd, rs1, rs2);         break;
+			case 0x3: sltu(rd, rs1, rs2);        break;
+			case 0x4: xor_execute(rd, rs1, rs2); break;
+			case 0x5: srl(rd, rs1, rs2);         break;
+			case 0x6: or_execute(rd, rs1, rs2);  break;
+			case 0x7: and_execute(rd, rs1, rs2); break;
+			}
+		}
+		else if (funct7 == 0x20 && funct3 == 0x0) sub(rd, rs1, rs2);
+		else if (funct7 == 0x20 && funct3 == 0x5) sra(rd, rs1, rs2);
+		else throw std::runtime_error("Unsupported arithmetic instruction");
+		break;
+
+	case 0x0F:
+		break;
+
+	case 0x73: // system
+		if (instruction == 0x00000073u) {
+			ecall();
+			return false;
+		}
+
+		else if (instruction == 0x00100073u) {
+			ebreak();
+			return false;
+		}
+		else throw std::runtime_error("Unsupported system instruction");
+		break;
+
+	default:
+		throw std::runtime_error("Unsupported opcode");
+	}
+
+	regs.PC = regs.PC + 4;
+	return true;
 }
 void CPU::addi(uint32_t rd, uint32_t rs1, int imm){	
 	write_register(rd, regs.x[rs1] + imm);
-	regs.PC = regs.PC + 4;
 }
 void CPU::slti(uint32_t rd, uint32_t rs1, int imm) {
 	if (imm > static_cast<int32_t>(regs.x[rs1])) { //convert rs1 from unsigned to signed as slti is unsigned operatoin
@@ -54,6 +170,7 @@ void CPU::srai(uint32_t rd, uint32_t rs1, uint32_t shamt) {
 		// 0xFFFFFFFFu if just 32 bit number with all 1
 		// so the rigtward shift just creates the number of 1s we needed combined with bitmask OR to create 1s
 	}
+	write_register(rd, result);
 }
 
 void CPU::add(uint32_t rd, uint32_t rs1, uint32_t rs2) {
@@ -67,8 +184,7 @@ void CPU::sll(uint32_t rd, uint32_t rs1, uint32_t rs2) {
 	write_register(rd, regs.x[rs1] << (regs.x[rs2] & 0x1F)); //again bitwise function this time to only take 5 bits of rs2 as max shift of register can be 31
 }
 void CPU::slt(uint32_t rd, uint32_t rs1, uint32_t rs2) {
-	int32_t signed_val_rs2 = static_cast<int32_t>(regs.x[rs2]);
-	if( regs.x[rs1] < signed_val_rs2){
+	if(static_cast<int32_t>(regs.x[rs1]) < static_cast<int32_t>(regs.x[rs2])){
 		write_register(rd, 1);
 	}
 	else { write_register(rd, 0); }
@@ -87,14 +203,14 @@ void CPU::srl(uint32_t rd, uint32_t rs1, uint32_t rs2) {
 	write_register(rd, regs.x[rs1] >> (regs.x[rs2] & 0x1F));
 }
 void CPU::sra(uint32_t rd, uint32_t rs1, uint32_t rs2) {
-	write_register(rd, static_cast<int32_t>(regs.x[rs1]) >> regs.x[rs2] & 0x1F); //this time the static cast replaces the bitwise logic used before
+	write_register(rd, static_cast<int32_t>(regs.x[rs1]) >> (regs.x[rs2] & 0x1F)); //this time the static cast replaces the bitwise logic used before
 	//AFAIK it somehow figures out how to correctly deal with this and the shift
 }
 void CPU::or_execute(uint32_t rd, uint32_t rs1, uint32_t rs2) {
-	write_register(rd, regs.x[rs1] | rs2);
+	write_register(rd, regs.x[rs1] | regs.x[rs2]);
 }
 void CPU::and_execute(uint32_t rd, uint32_t rs1, uint32_t rs2) {
-	write_register(rd, regs.x[rs1] & rs2);
+	write_register(rd, regs.x[rs1] & regs.x[rs2]);
 
 }
 void CPU::lui(uint32_t rd, uint32_t imm) { //this case it is a unsinged as it is simply value from [31:12]
@@ -102,7 +218,7 @@ void CPU::lui(uint32_t rd, uint32_t imm) { //this case it is a unsinged as it is
 
 }
 void CPU::auipc(uint32_t rd, uint32_t imm) {
-	write_register(rd, regs.PC + (imm < 12));
+	write_register(rd, regs.PC + (imm << 12));
 }
 void CPU::lbu(uint32_t rd, int32_t imm, uint32_t rs1) {
 
@@ -126,23 +242,23 @@ void CPU::lw(uint32_t rd, int32_t imm, uint32_t rs1) {
 }
 void CPU::lh(uint32_t rd, int32_t imm, uint32_t rs2) {
 	uint32_t address = regs.x[rs2] + imm;
-	uint32_t value = mem_.read8(address);
+	uint32_t value = mem_.read16(address);
 	if (value & 0x8000u) { //sign extension since mem returns unsinged int and we need signed( its is checking for 1 at msb)
-		value = value | 0xFFFFFF00u; // extends by 1
+		value = value | 0xFFFF0000u; // extends by 1
 	}
 	write_register(rd, value);
 }
-void CPU::sb(uint32_t rs1, int32_t imm, uint32_t rs2) {
+void CPU::sb(uint32_t rs2, int32_t imm, uint32_t rs1) {
 	uint32_t address = regs.x[rs1] + imm;
 	uint8_t value = regs.x[rs2] & 0xFFu; //only takes lowest 8 bites
 	mem_.write8(address, value);
 }
-void CPU::sh(uint32_t rs1, int32_t imm, uint32_t rs2) {
+void CPU::sh(uint32_t rs2, int32_t imm, uint32_t rs1) {
 	uint32_t address = regs.x[rs1] + imm;
 	uint16_t value = regs.x[rs2] & 0xFFFFu; //only takes lowest 16 bites
 	mem_.write16(address, value);
 }
-void CPU::sw(uint32_t rs1, int32_t imm, uint32_t rs2) {
+void CPU::sw(uint32_t rs2, int32_t imm, uint32_t rs1) {
 	uint32_t address = regs.x[rs1] + imm;
 	mem_.write32(address, regs.x[rs2]);
 }
@@ -198,8 +314,13 @@ void CPU::jalr(uint32_t rd, int32_t imm, uint32_t rs1) {
 }
 
 void CPU::ecall() {
-	abort();
+	// This bare-metal runner treats ECALL as a halt (no operating system).
 }
 void CPU::ebreak() {
-	abort();
+	// EBREAK also halts; step() reports this to the runner.
+}
+
+uint32_t CPU::read_register(uint32_t index) const {
+	if (index >= 32) throw std::out_of_range("Register index must be below 32");
+	return regs.x[index];
 }

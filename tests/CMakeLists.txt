@@ -10,3 +10,10 @@ riscv_setup_target(riscv_tests)
 # Visual Studio's Test Explorer and in `ctest`.
 include(Catch)
 catch_discover_tests(riscv_tests)
+
+# Exercise the file loader, execution loop, and halting behavior together.
+add_test(NAME sample_sum COMMAND riscv "${PROJECT_BINARY_DIR}/samples/sum.bin")
+set_tests_properties(sample_sum PROPERTIES
+    PASS_REGULAR_EXPRESSION "a0 \\(x10\\) = 55"
+    TIMEOUT 10
+)
